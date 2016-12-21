@@ -1,0 +1,14 @@
+== 示例与指南(从这开始)
+
+如果你想要看看如何开始Spring Security，最好的办法就是看看我们的示例。
+
+.示例应用
+[width="80%",options="header"]
+|====
+| 源码 | 描述 | 手册
+| https://github.com/spring-projects/spring-security/tree/4.1.3.RELEASE/samples/javaconfig/helloworld[Hello Spring Security] | 展示了如何基于Java配置集成Spring Security | http://docs.spring.io/spring-security/site/docs/4.1.3.RELEASE/guides/html5/helloworld-javaconfig.html[Hello Spring Security Guide]
+| https://github.com/spring-projects/spring-security/tree/4.1.3.RELEASE/samples/boot/helloworld[Hello Spring Security Boot] | 展示了如何与已存在的Spring Boot应用集成 | http://docs.spring.io/spring-security/site/docs/4.1.3.RELEASE/guides/html5/helloworld-boot.html[Hello Spring Security Boot Guide]
+| https://github.com/spring-projects/spring-security/tree/4.1.3.RELEASE/samples/xml/helloworld[Hello Spring Security XML] | 展示了如何基于XML配置集成Spring Security | http://docs.spring.io/spring-security/site/docs/4.1.3.RELEASE/guides/html5/helloworld-xml.html[Hello Spring Security XML Guide]
+| https://github.com/spring-projects/spring-security/tree/4.1.3.RELEASE/samples/javaconfig/hellomvc[Hello Spring MVC Security] | 展示了如何与Spring MVC集成 | http://docs.spring.io/spring-security/site/docs/4.1.3.RELEASE/guides/html5/hellomvc-javaconfig.html[Hello Spring MVC Security Guide]
+| https://github.com/spring-projects/spring-security/tree/4.1.3.RELEASE/samples/javaconfig/form[Custom Login Form] | 展示了如何创建自定义登陆表单 | http://docs.spring.io/spring-security/site/docs/4.1.3.RELEASE/guides/html5/form-javaconfig.html[Custom Login Form Guide]
+|====

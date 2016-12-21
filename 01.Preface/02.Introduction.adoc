@@ -1,0 +1,299 @@
+== 简介
+
+=== Spring Security 是什么？
+
+Spring Security 为基于 Java EE 的企业应用提供综合的安全服务。尤其支持使用Spring Framework构建的项目，这是目前企业软件开发的流行的Java EE解决方案。  
+
+如果在企业应用开发中没有使用 Spring， 我们由衷的鼓励你仔细看看它。深入Spring并理解依赖注入原则，将帮助你很快的学会 Spring Security 。  
+
+人们使用 Spring Security 的原因有很多，但迁移到此项目最主要的原因是发现 Java EE Servlet 规范或 EJB 规范的安全特性在典型的企业应用场景中缺乏深度，它们在 WAR 或 EAR 级别也并不轻便。因此，如果你需要切换服务环境，那么你需要在新的环境中做大量的重复配置工作。  
+
+使用 Spring Security 可以解决这些问题，它还可以为你带来更多其他有用且可定制的安全特性。  
+
+你也许已经知道，应用安全最主要的两个方面分别是“认证”与“授权”（或“访问控制”）。它们也是 Spring Security 的两个主要目标。“认证”是确认角色（principal）身份的过程（"principal"通常表示一个用户、设备或其他可以在你的应用中执行操作的系统）。“授权”指的是判定角色是否拥有执行动作的权限的过程。在到达需要进行授权判定的地方前，角色的身份必须已经通过认证。这些概念非常通用，它们并不是 Spring Security 的特性。  
+
+[NOTE]
+*principal* 本意是：本金; 首长，负责人; 主要演员，主角; [法] 委托人，当事人。在此翻译成“角色”有欠妥当，但可以便于读者理解。 （译者注）  
+
+在认证级别，Spring Security 支持范围广泛的认证模型。大多数认证模型由第三方提供，或由相关标准制定组织(如 IETF)研制。
+
+另外，Spring Security 提供它自己的认证功能。  
+
+特别地，Spring Security 目前已经集成了如下一些认证技术：  
+
+- HTTP BASIC headers认证 (基于IETF RFC标准)  
+- HTTP Digest headers认证 (基于IETF RFC标准)  
+- HTTP X.509 客户端证书交换 (基于IETF RFC标准)  
+- LDAP (一种非常常见的跨平台认证需求，在大环境下尤甚）  
+- 基于表单的认证 (通常用于简单的用户需求)  
+- OpenID认证  
+- 基于预定义的请求头进行认证 (诸如计算机集群)  
+- JA-SIG 中央认证服务 (也称为CAS, 是一种流行的开源的单点登陆系统)  
+- 为RMI 和 HttpInvoker（一种Spring远程协议）提供对用户透明的认证机制  
+- 自动的 "remember-me" 认证 (你可以勾选此选项，从而避免在一定时间内进行重复认证)  
+- 匿名认证 (为每个未经认证的用户提供一个特殊的安全身份)  
+- Run-as 认证 (同一个调用需要进行不同的安全校验时非常有用)  
+- Java认证与认证服务 - Java Authentication and Authorization Service (JAAS)  
+- JEE认证 (如果你需要，你仍然可以使用容器托管认证)  
+- Kerberos  
+- Java开源单点登陆 - Java Open Source Single Sign On (JOSSO) *  
+- OpenNMS网络管理平台 - OpenNMS Network Management Platform *  
+- AppFuse *  
+- AndroMDA *  
+- Mule ESB *  
+- Direct Web Request (DWR) *  
+- Grails *  
+- Tapestry *  
+- JTrac *  
+- Jasypt *  
+- Roller *  
+- Elastic Path *  
+- Atlassian Crowd *  
+- 你自己的权限系统 (参见后续内容)  
+
+带*表示由第三方提供。
+
+许多独立软件供应商(independent software vendors，ISVs)采用Spring Security，因为这代表着选择了灵活的认证模块。无论终端是什么，这样做都可以让他们迅速地集成他们自己的解决方案，而不必做大量的工作来适应客户端环境的变更。  
+
+如果上述的认证机制没有满足你的需求，Spring Security也提供一个开放的平台让你方便的实现自己的认证机制。很多企业用户需要Spring Security帮助集成遗留（"legacy"）的系统，而不需要其他标准的安全特性，那么Spring Security也能很好的工作。  
+
+认证机制无关，Spring Security允许对授权功能进行深度设置。它关注于三个主要方面：web请求授权、方法调用授权以及域对象实例访问授权。为了帮助你理解它们的区别，你可以思考如何分别对Servlet规范的web模式(pattern)安全、EJB容器托管安全以及文件系统安全提供授权功能。Spring Security对这些领域都提供深入的功能，我们会在下文为您展示。
+
+=== 历史背景  
+
+Spring Security 开始于2003年后半年的“The Acegi Security System for Spring”。Spring开发者邮件清单中提出了这一问题，大家都在询问我们是否在考虑一个基于Spring的安全实现。这时Spring社区还没有现在这么庞大，并且Spring也仅仅是一个2003年早期的SourceForge项目。我们认为这是一个很有价值的问题，尽管当时没有时间去探索。  
+
+伴随着这一想法，一个简单的security实现被构建出来而未发布。几周之后，一些Spring社区的其他成员开始询问有关安全的问题，于是我们将源码提供给了他们。直到2004年1月，已经大约有20人在使用此代码。这些首批用户开始建议将其作为一个SourceForge项目，于是项目于2004年3月正式成立。  
+
+在那一时期，此项目并没有自身的认证模块。认证过程依靠容器托管安全，并且使用Acegi Security处理授权功能。开始的时候还狠不错，但随着需要支持的容器越来越多，特定于容器认证领域的基本限制开始出现。还有一些关于将新的JARs加入容器的classpath的问题，这些问题经常使用户感到混乱并且难于配置。  
+
+特定于Acegi Security的认证服务随后被引入。大约一年之后，Acegi Security成为了Spring Framework官方子项目。2006年5月，1.0.0 final release版本正式发布。经过将近三年的时间，它已经被活跃地使用在很多产品软件项目中，并且得到数以百计的改进以及社区贡献。  
+
+Acegi Security在2007年年末的时候，正式成为Spring Portfolio官方项目，并更名为"Spring Security"。  
+
+到了今天，Spring Security已经加入了健壮而活跃的开源社区。在论坛上已经有数以千计的关于Spring Security的消息。这里有活跃的核心开发者，有活跃的社区，还有定期修复与支持此项目的同志。
+
+=== 版本编号  
+
+理解Spring Security版本编号会对你的工作非常有用，这会对你的项目迁移有所帮助。每个版本都使用标准的整数排列：MAJOR.MINOR.PATCH(主版本.小版本.补丁)。MAJOR的变更意味着大规模的API的更新，因此很多地方都不会兼容旧版本。MINOR的变更尽可能保持源码和编译文件的兼容性，尽管可能有一些设计上的变更或者不兼容的更新。PATCH通常完全向前向后兼容，主要用于修复一些bug与缺陷。  
+
+你受影响的程序取决于你的编码的耦合性。如果你做了大量定制，那么肯定会比简单的使用命名空间进行配置受到的影响更多一些。  
+
+记得在发布新版本之前应该彻底地测试你的应用。
+
+=== 获取Spring Security
+
+你可以用几种办法来获取Spring Security。  
+
+你可以从Spring Security主页下载发布的包，也可以从Maven中央仓库（或用于发布快照和里程碑版本的Spring Maven仓库）单独下载jars，或者自己从源码来构建。  
+
+==== 获取Maven  
+
+最小的Spring Security Maven依赖设置像下面这样:  
+
+.pom.xml
+[source,xml]
+----
+<dependencies>  
+    <!-- ... other dependency elements ... -->  
+    <dependency>  
+        <groupId>org.springframework.security</groupId>  
+        <artifactId>spring-security-web</artifactId>  
+        <version>4.1.3.RELEASE</version>  
+    </dependency>  
+    <dependency>  
+        <groupId>org.springframework.security</groupId>  
+        <artifactId>spring-security-config</artifactId>  
+        <version>4.1.3.RELEASE</version>  
+    </dependency>  
+</dependencies>  
+----
+
+如果你需要使用如LDAP，OpenID这些附加的功能，你还需要包含它们。详见《<<2.4.3, 项目模块>>》
+
+===== Maven Repositories  
+
+所有的GA版本（即以.RELEASE结尾的版本）都会发布到Maven中央仓库，因此不需要在你的pom中声明额外的Maven仓库。  
+
+如果你要使用SNAPSHOT快照版本，那么你需要确保像下面这样声明了Spring Snapshot仓库定义：  
+
+.pom.xml
+[source,xml]
+----
+<repositories>  
+    <!-- ... possibly other repository elements ... -->  
+    <repository>  
+        <id>spring-snapshot</id>
+        <name>Spring Snapshot Repository</name>  
+        <url>http://repo.spring.io/snapshot</url>
+    </repository>  
+</repositories>  
+----
+
+如果你要使用一个里程碑或候选release版本，那么你需要像下面这样声明Spring Milestone仓库:  
+
+.pom.xml
+[source,xml]
+----
+<repositories>  
+    <!-- ... possibly other repository elements ... -->  
+    <repository>  
+        <id>spring-milestone</id>
+        <name>Spring Milestone Repository</name>  
+        <url>http://repo.spring.io/milestone</url>  
+    </repository>  
+</repositories>
+----
+
+===== Spring Framework Bom  
+
+Spring Security在Spring Framework 4.3.2.RELEASE上构建,但也可以在4.0.x上运作。很多用户会将Spring Security的依赖关系传递到Spring Framework 4.3.2.RELEASE，这可能会导致一些奇怪的classpath问题。  
+
+一种不推荐的解决办法是在你的pom文件中的 `<dependencyManagement>` 包含所有的Spring Framework模块。另一种方法是在其中包含 `spring-framework-bom`，就像下面这样:  
+
+.pom.xml
+[source,xml]
+----
+<dependencyManagement>
+    <dependencies>
+    <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-framework-bom</artifactId>
+        <version>4.3.2.RELEASE</version>
+        <type>pom</type>
+        <scope>import</scope>
+    </dependency>
+    </dependencies>
+</dependencyManagement>
+----
+
+这将确保你的Spring Security的依赖使用Spring 4.3.2.RELEASE模块。  
+
+[NOTE]
+这使用了Maven的"bill of materials"(BOM)的概念，并且只能用于Maven 2.0.9或更新的版本。关于依赖如何被解析，详情可以参见 《 http://maven.apache.org/guides/introduction/introduction-to-dependency-mechanism.html[Maven介绍-依赖机制] 》
+
+==== Gradle  
+
+最小的Spring Security Gradle依赖配置像下面这样：  
+
+.build.gradle
+[source,gradle]
+----
+dependencies {
+    compile 'org.springframework.security:spring-security-web:4.1.3.RELEASE'
+    compile 'org.springframework.security:spring-security-config:4.1.3.RELEASE'
+}
+----
+
+如果你需要使用诸如LDAP、OpenID之类的功能，你需要包含它们。详见《 <<2.4.3, 项目模块>> 》。  
+
+===== Gradle仓库  
+
+所有的GA版本(以.RELEASE结尾的版本)都发布在Maven中央仓库，因此可以使用mavenCentral()仓库来指定GA版本。  
+
+.build.gradle
+[source,gradle]
+----
+repositories {
+    mavenCentral()
+}
+----
+
+如果你要使用SNAPSHOT快照版本，那么你需要确保像下面这样声明了Spring Snapshot仓库定义：
+
+.build.gradle
+[source,gradle]
+----
+repositories {
+    maven { url 'https://repo.spring.io/snapshot' }
+}
+----
+
+如果你要使用一个里程碑或候选release版本，那么你需要像下面这样声明Spring Milestone仓库:  
+
+.build.gradle
+[source,gradle]
+----
+repositories {
+    maven { url 'https://repo.spring.io/milestone' }
+}
+----
+
+===== Spring 4.0.x与Gradle的使用  
+
+默认情况下Gradle进行版本依赖传递时会使用最新版本，这意味着如果你使用Spring Security 4.1.3.RELEASE与Spring Framework 4.3.2.RELEASE时不需要额外配置。但有时候会出现一些问题，所以建议使用Gradle的ResolutionStrategy，像下面这样：  
+
+.build.gradle
+[source,gradle]
+----
+configurations.all {
+    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+        if (details.requested.group == 'org.springframework') {
+            details.useVersion '4.3.2.RELEASE'
+        }
+    }
+}
+----
+
+这确保了Spring Security将使用指定版本的Spring Framework依赖。  
+
+[NOTE]
+这一例子运行在Gradle 1.9，如果要在更新版本的Gradle上运行，那么可能需要适当修改。  
+
+==== 项目模块  
+
+在Spring Security 3.0中，代码库已经被切分成一些单独的jars，从而更清晰的把不同的功能点以及第三方依赖进行区分。如果你使用Maven来构建你的项目，你需要将这些模块添加到你的`pom.xml`中。就算你没有使用maven，我们仍然建议你参考`pom.xml`文件，以获取一些第三方依赖和版本号。另外，在包含的示例应用中查看版本也不失为一种好的办法。  
+
+===== Core - spring-security-core.jar  
+
+包含了核心认证与访问控制类型和接口，远程支持，以及提供基础APIs。任何使用Spring Security的应用都需要包含它。支持独立应用、远程客户端、方法（服务层）安全和JDBC提供用户。包含了如下顶级包：  
+
+- org.springframework.security.core
+- org.springframework.security.access
+-  org.springframework.security.authentication
+-  org.springframework.security.provisioning
+
+===== Remoting - spring-security-remoting.jar  
+
+提供与Spring Remoting的集成。你不需要用到这玩意儿，除非你用Spring Remoting写了个远程客户端。主要的包是`org.springframework.security.remoting`。  
+
+===== Web - spring-security-web.jar  
+
+包含过滤器以及和web安全相关的基础代码，它们都依赖于servlet API。如果你需要使用Spring Security的web认证服务，并且需要基于URL的访问控制，这就是你所需要的。主要的包是`org.springframework.security.web`。  
+
+===== Config - spring-security-config.jar  
+
+包含安全命名空间转换代码以及Java配置代码。如果你要使用Spring Security XML命名空间配置，或Spring Security的Java配置，那么你需要包含它。它主要的包是`org.springframework.security.config`。其中没有任何类是要在应用程序中直接使用的。  
+
+===== LDAP - spring-security-ldap.jar  
+
+LDAP认证和提供的代码。如果你需要使用LDAP认证或管理LDAP用户记录，那么就include它。顶级包是`org.springframework.security.ldap`。  
+
+===== ACL - spring-security-acl.jar  
+
+指定了ACL领域对象的实现。用来在你的应用中指定domain对象实例来提供安全保障。顶级包是`org.springframework.security.acls`。  
+
+===== CAS - spring-security-cas.jar  
+
+Spring Security的CAS客户端集成。如果你想要在CAS单点登陆服务器上使用Spring Security的web认证，那么就include它。顶级包是`org.springframework.security.cas`。  
+
+===== OpenID - spring-security-openid.jar  
+
+提供OpenID web认证支持。用来针对外部OpenId服务提供用户认证。`org.springframework.security.openid`依赖于OpenID4Java。  
+
+===== Test - spring-security-test.jar  
+
+支持Spring Security的测试。  
+
+==== 检出源码Source  
+
+在Spring Security称为一个开源项目后，我们鼓励你用git检出源码。你可以得到全部的示例应用，而且你可以很方便的构建最新版本的项目。拥有源码也可以使你方便的调试应用。异常栈不再是一个不透明的黑盒，你可以找到源码中出问题的那一行，并且查看发生了什么。源码就是项目的最终文档，你可以从中看到此项目是如何工作的。  
+
+用如下git命令获取源码：  
+
+[source,bash]
+----
+git clone https://github.com/spring-projects/spring-security.git
+----
+
+你可以从中你的机器上访问整个项目的历史（包括全部的releases版本以及分支）。

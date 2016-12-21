@@ -1,0 +1,17 @@
+== Spring Security社区
+
+=== 缺陷跟踪
+
+Spring Security使用JIRA来管理bug报告与enhancements申请。如果你找到一个bug，请用JIRA记录一份报告。不要在支持论坛上记录它，用email发送清单给项目开发者。这样可以点对点处理，同时可以让我们更方便的管理bugs。
+
+如果可以，请在你的问题报告中提交一个JUnit测试来展示任何错误的行为。或者，更进一步，你可以提供一个补丁来纠正此问题。类似的，但如果你包含了适当的单元测试，我们也非常欢迎你在缺陷跟踪里提出enhancements，尽管我们只会接受enhancements请求。为了确保项目测试被充分覆盖，这是非常必要的。
+
+你可以通过 https://github.com/spring-projects/spring-security/issues[https://github.com/spring-projects/spring-security/issues] 访问缺陷跟踪者。
+
+=== 加入我们
+
+我们在Spring Security项目中欢迎你的参与。有很多贡献的方式，如访问论坛并回复一些他人的问题，写出一些新的代码，改进旧的代码，协助文档，开发示例与教程，或者简单地发表建议。
+
+=== 更多信息
+
+Spring Security非常欢迎问题与评论。你可以在Spring的StackOverflow web的站点 http://spring.io/questions[http://spring.io/questions]，和其他使用Spring Security的用户讨论此框架。

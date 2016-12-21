@@ -1,0 +1,75 @@
+== 示例应用
+
+项目中有一些可用的web应用示例。为了过度下载，只有“tutorial”和“contacts”示例被包含到了分发的zip文件中。另一些示例可以直接从源码中构建，你可以在简介的<<2.4,描述>>中获取它们。你可以很容易地构建项目，也可以在 http://spring.io/spring-security/[http://spring.io/spring-security/] 中查阅更多资料。本章所有的路径都引用自相关的项目源目录中。
+
+=== Tutorial 示例
+
+tutorial是非常好的起步教材。它全部使用了简单的namespace配置。"distribution zip"文件中包含了已编译好的应用，可以方便的部署到你的web容器中 (`spring-security-samples-tutorial-3.1.x.war`)。<<6.2,基于表单>>的认证机制被用来结合常用的remember-me认证，从而在cookies中自动记住了登陆状态。
+
+我们建议你像下面这样，用简短的XML开始tutorial示例。最重要的是，你可以很容易地添加这一XML文件（以及对应的`web.xml`记录）到你的原有应用中。我们建议你在实现了这一基本的集成之后，再尝试去添加method授权或domain object安全。
+
+=== Contacts
+
+这个Contacts示例是一个高级的例子，它展示了除基础应用完全之外的更强大的domain对象访问控制列表功能。
+
+配置非常简单，只要简单的拷贝Spring Security分发包中的`spring-security-samples-contacts-3.1.x.war`文件到你的容器的webapps目录中即可。(版本号应当和你正在使用的release版本相匹配)
+
+在启动你的容器之后，查看应用能否加载。访问`http://localhost:8080/contacts`（或者其他适当的URL）
+
+下一步，点击“Debug”。你会被要求进行认证，页面会提示你输入用户名和密码。简单的进行认证，并查看结果页面，你可以看到类似下面这样的成功的消息：
+
+[source,text]
+----
+Security Debug Information
+
+Authentication object is of type:
+org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+
+Authentication object as a String:
+
+org.springframework.security.authentication.UsernamePasswordAuthenticationToken@1f127853:
+Principal: org.springframework.security.core.userdetails.User@b07ed00: Username: rod; \
+Password: [PROTECTED]; Enabled: true; AccountNonExpired: true;
+credentialsNonExpired: true; AccountNonLocked: true; \
+Granted Authorities: ROLE_SUPERVISOR, ROLE_USER; \
+Password: [PROTECTED]; Authenticated: true; \
+Details: org.springframework.security.web.authentication.WebAuthenticationDetails@0: \
+RemoteIpAddress: 127.0.0.1; SessionId: 8fkp8t83ohar; \
+Granted Authorities: ROLE_SUPERVISOR, ROLE_USER
+
+Authentication object holds the following granted authorities:
+
+ROLE_SUPERVISOR (getAuthority(): ROLE_SUPERVISOR)
+ROLE_USER (getAuthority(): ROLE_USER)
+
+Success! Your web filters appear to be properly configured!
+
+----
+
+如果你成功接收到上面这些消息，试着返回示例应用的主页面，然后点击“Manage”。你可以试试这个应用。注意，联系人只能对已登陆的用户进行展示，并且只有用户具有`ROLE_SUPERVISOR`角色时才会被允许删除他们的联系人。在后台，`MethodSecurityInterceptor`正在保护着这些business对象。
+
+应用程序允许你针对不同的联系人修改访问控制清单。一定要运行一下，然后通过reviewing此应用的XML文件，来理解它们是怎样运作的。
+
+=== LDAP示例
+
+LDAP示例应用提供了基本的配置，并且同时使用了namespace配置以及等价的传统beans配置，两者都在应用程序上下文文件中。这意味应用中存在两个权限提供者的配置。
+
+=== OpenID示例
+
+OpenID示例展示了如何使用命名空间进行OpenID的配置，以及如何为谷歌、雅虎和MyOpenID(你可以试着加入一些其他你想要的)身份提供者设置属性来变换配置。该示例使用了基于JQuery的openid-selector项目，来提供一个对用户友好的登陆页面，从而允许用户更容易地选择一个provider，而不是输入全部OpenID标识。
+
+此应用区别于传统的认证场景，它允许任何用户访问站点（提供给它们的OpenID认证是成功的）。你第一次登陆时，你将得到一个"Welcome [your name]"的消息。如果你注销并重新登陆（用同样的OpenID身份），提示会变为“Welcome Back”。这由一个定制的`UserDetailsService`实现，它给任何用户都分配了一个标准的角色，并且在一个map中保存身份信息。这个类也重视这样一个事实，不同的属性也许会由不同的provider返回，并根据不同的用户构建不一样的称呼。
+
+=== CAS示例
+
+CAS示例需要你同时运行CAS服务器与CAS客户端。它没有被distribution包含，因此你需要像介绍里面说的那样 http://docs.spring.io/spring-security/site/docs/4.1.3.RELEASE/reference/htmlsingle/#get-source[检出源码]。你会在`sample/cas`目录找到相关文件。`Readme.txt`文件中解释了如何直接从源码树中同时执行服务器与客户端，并启用SSL支持。
+
+=== JAAS示例
+
+JAAS示例非常简单，它展示了如何在Spring Security中使用JAAS的LoginModule。如果用户名与密码相匹配，被提供的LoginModule会成功认证，否则会抛出一个`LoginException`。 这个示例使用的`AuthorityGranter`总会授权`ROLE_USER`。示例程序还展示了如何通过设置`jaas-api-provision`为"true"来像JAAS Subject 一样运行，由`LoginModule`进行返回。
+
+=== 预认证示例
+
+这个例子展示了如何从预认证框架中绑定beans，从而从Java EE容器中使用登陆登陆信息。用户名与角色由容器设置。
+
+代码在`samples/preauth`中。
