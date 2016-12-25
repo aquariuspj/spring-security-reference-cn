@@ -1,0 +1,87 @@
+== 基础与摘要认证
+
+基础与摘要认证是可选的认证机制，它们在web应用中非常流行。基础认证通常用于无状态的客户端，它们在每个请求中都传递凭证信息。将其与基于表单的认证相结合的做法非常普遍，应用程序用于提供一个基于浏览器的用户接口以及web服务。然而，基础认证提交的是明文密码，因此它应该只用于像是HTTPS这样的加密传输层。
+
+=== BasicAuthenticationFilter
+
+`BasicAuthenticationFilter`负责处理基础认证凭证，它在HTTP头中被提供。这可以用于认证调用过程，该过程由Spring远程协议创建（例如Hessian和Burlap），就像通常的浏览器用户代理（例如Firefox和IE）。标准的HTTP Basic Authentication被定义在RFC 1945的第11节，`BasicAuthenticationFilter`符合RFC规则。基础认证一种具有吸引力的认证手段，因为它非常广泛地被部署，其用户代理与实现都非常的简单（它只是一个用户名:密码的Base64编码，在HTTP头中被指定）。
+
+==== 配置
+
+为了实现HTTP基础认证，你需要添加一个`BasicAuthenticationFilter`到你的过滤器链中。应用上下文应该包含`BasicAuthenticationFilter`还有它需要的小伙伴：
+
+[source,xml]
+----
+<bean id="basicAuthenticationFilter"
+class="org.springframework.security.web.authentication.www.BasicAuthenticationFilter">
+<property name="authenticationManager" ref="authenticationManager"/>
+<property name="authenticationEntryPoint" ref="authenticationEntryPoint"/>
+</bean>
+
+<bean id="authenticationEntryPoint"
+class="org.springframework.security.web.authentication.www.BasicAuthenticationEntryPoint">
+<property name="realmName" value="Name Of Your Realm"/>
+</bean>
+
+----
+
+配置的`AuthenticationManager`处理每一个认证请求。如果认证失败，配置的`AuthenticationEntryPoint`会用来再次启动认证过程。通常你会将过滤器结合`BasicAuthenticationEntryPoint`来使用，它会在适当的头中返回一个401响应，告诉你要重新进行HTTP基本认证。如果认证成功，那么通常会返回一个`Authentication`对象，并将此对象放到`SecurityContextHolder`中。
+
+如果认证事件成功了，或者认证被HTTP头告知不支持该认证请求，过滤器链通常都会继续。只有认证失败时，过滤器链才会被阻断，然后调用`AuthenticationEntryPoint`。
+
+=== DigestAuthenticationFilter
+
+`DigestAuthenticationFilter`能够处理摘要认证凭证，凭证在HTTP头信息中。摘要认证试图解决很多基础认证的缺点，尤其是确保凭证信息不会以明文方式发送和传输。很多用户代理支持摘要认证，包括FireFox和IE。HTTP摘要认证的标准被定义在RFC 2617中，它是一个比RFC 2069规定的更新的版本。大多数的用户代理都实现了RFC 2617。Spring Security的`DigestAuthenticationFilter`兼容在RFC 2617中规定的"auth"保护特性(qop)，该特性提供对RFC 2069的兼容。如果你需要使用非加密的HTTP（例如TLS/HTTPS），同时又希望尽可能增大认证过程的安全性，那么摘要认证提供了更有吸引力的选择。实际上，摘要认证是WebDAV规范中强制性的需求，就像RFC 2518第17.1节说的那样。
+
+.注意
+[NOTE] 
+你不应该在现在的应用中使用摘要，它们不够安全。最明显的问题就是你必须以明文、密文或者MD5格式存储密码。所有这些存储格式都被证明不安全。作为替代，你应该使用一种合适的密码哈希（例如BCrypt，PBKDF2，SCrypt等等）。
+
+摘要认证的核心是"nonce"。这是一个服务器产生的值。Spring Security的nonce采用如下格式：
+
+[source,text]
+----
+base64(expirationTime + ":" + md5Hex(expirationTime + ":" + key))
+expirationTime:   The date and time when the nonce expires, expressed in milliseconds
+key:              A private key to prevent modification of the nonce token
+
+----
+
+`DigestAuthenticatonEntryPoint`具有一个参数，它能指定用于生成nonce tokens的键值，它与`nonceValiditySeconds`参数一起用于判断完结时间（默认的300秒等于5分钟）。nonce会一直有效，摘要由包括用户名、密码、nonce、被提交的URI、客户端生成的nonce（只是一个用户代理在每次请求时生成的随机值），还有域名等字符串链接并计算出来，然后执行一个MD5的哈希。服务器和用户代理都执行这一摘要计算，如果它们包含的其中一个值不一致（例如密码）那么哈希的结果也会不一样。在Spring Security实现中，如果服务器生成的nonce仅有预期（但摘要依然是有效的）,`DigestAuthenticationEntryPoint`会发送一个"stale=true"头。这告诉用户客户端不需要打扰用户（例如用户名和密码等是正确的），但需要简单的用一个新nonce进行重试。
+
+`DigestAuthenticationEntryPoint`的`nonceValiditySeconds`参数根据你的应用填入一个适当的值。非常安全的应用应该要考虑到，在nonce到期之前（`expirationTime`指定了到期时间），被拦截的应用程序头可以被用于模拟principal。在适当的设置被选择时，这是个关键的principal，但要尽可能保护应用程序在第一个实例中不被以TLS/HTTPS方式运行，这很重要。
+
+[NOTE]
+这一段翻译的有点拗口，欢迎更好的翻译...
+
+由于摘要认证的实现更为复杂，所以用户代理经常出问题。例如，IE不能在后续同样的session请求中提供“opaque”token。因此，Spring Security过滤器将所有的状态信息压缩到"nonce"token作为替代。在我们的测试中，Spring Security的实现能够很好的运行在FireFox和IE中，能够正确的操作nonce超时等。
+
+==== 配置
+
+让我们回忆一下概念，看看如何使用。为了实现HTTP摘要认证，在过滤器链中定义一个`DigestAuthenticationFilter`非常必要。在应用上下文中需要定义`DigestAuthenticationFilter`还有他的小伙伴：
+
+[source,xml]
+----
+<bean id="digestFilter" class=
+    "org.springframework.security.web.authentication.www.DigestAuthenticationFilter">
+<property name="userDetailsService" ref="jdbcDaoImpl"/>
+<property name="authenticationEntryPoint" ref="digestEntryPoint"/>
+<property name="userCache" ref="userCache"/>
+</bean>
+
+<bean id="digestEntryPoint" class=
+    "org.springframework.security.web.authentication.www.DigestAuthenticationEntryPoint">
+<property name="realmName" value="Contacts Realm via Digest Authentication"/>
+<property name="key" value="acegi"/>
+<property name="nonceValiditySeconds" value="10"/>
+</bean>
+
+----
+
+需要配置`UserDetailsService`，因为`DigestAuthenticationFilter`必须能够直接访问用户的明文密码。如果你在你的DAO [15] 中使用了编码的密码，那么摘要认证将无法工作。DAO小伙伴和`UserCache`一起，通常会直接和`DaoAuthenticationProvider`分享。`authenticationEntryPoint`参数必须是`DigestAuthenticationEntryPoint`，因此`DigestAuthenticationFilter`可以获取正确的域名和键值用于摘要计算。
+
+就像`BasicAuthenticationFilter`，如果认证成功，`Authentication`请求口令会被放进`SecurityContextHolder`。如果认证事件成功，或者认证由于HTTP头没有包含摘要认证请求，导致没有进行认证，过滤器链都会正常执行。只有认证失败，并且`AuthenticationEntryPoint`被调用，过滤器链才会被阻断，就像上一段介绍的那样。
+
+摘要认证的RFC提供附加的功能范围，以进一步增加安全。例如，nonce可以在每一次请求时被改变。尽管如此，Spring Security实现设计了最简单的实现（并且毫无疑问，用户代理的不兼容性会被暴露），并且避免保存服务器网站的状态。如果你希望去浏览这些功能的更多详情，那么就去看看RFC 2617。我们尽我们所能，让Spring Security的实现尽可能遵循最小化的这个RFC标准。
+
+[15] 可以用 `HEX( MD5(username:realm:password) )` 的格式编码密码，并为`DigestAuthenticationFilter.passwordAlreadyEncoded` 设置一个true值，其它的密码编码无法在摘要认证下工作。

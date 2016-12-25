@@ -1,0 +1,75 @@
+== CORS
+
+Spring Framework提供了 http://docs.spring.io/spring/docs/current/spring-framework-reference/htmlsingle/#cors[第一个类来支持CORS]。CORS必须在Spring Security之前被处理，因为准备提交的请求不会包含任何cookies（也就是JSESSIONID）。如果请求没有包含任何cookies，并且Spring Security在前，那么请求会判断用户无法认证（因为他们的请求中没有cookies！）并拒绝它。
+
+为了确保CORS先被处理，有一种简单的方式，就是使用`CorsFilter`。用户可以通过使用下面的配置，提供一个`CorsConfigurationSource`，从而集成Spring Security的`CorsFilter`：
+
+[source,java]
+----
+@EnableWebSecurity
+public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+            // by default uses a Bean by the name of corsConfigurationSource
+            .cors().and()
+            ...
+    }
+
+    @Bean
+    CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(Arrays.asList("https://example.com"));
+        configuration.setAllowedMethods(Arrays.asList("GET","POST"));
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+}
+
+----
+
+或者用XML：
+
+[source,xml]
+----
+<http>
+    <cors configuration-source-ref="corsSource"/>
+    ...
+</http>
+<b:bean id="corsSource" class="org.springframework.web.cors.UrlBasedCorsConfigurationSource">
+    ...
+</b:bean>
+
+----
+
+如果你在使用Spring MVC的CORS支持，你可以省略`CorsConfigurationSource`，Spring Security会引用Spring MVC中提供的CORS配置。
+
+[source,java]
+----
+@EnableWebSecurity
+public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+            // if Spring MVC is on classpath and no CorsConfigurationSource is provided,
+            // Spring Security will use CORS configuration provided to Spring MVC
+            .cors().and()
+            ...
+    }
+}
+
+----
+
+或者在XML中：
+
+[source,xml]
+----
+<http>
+    <!-- Default to Spring MVC's CORS configuraiton -->
+    <cors />
+    ...
+</http>
+----

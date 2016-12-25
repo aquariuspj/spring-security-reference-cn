@@ -1,0 +1,187 @@
+== 核心安全过滤器
+
+有一些键值过滤器，它们总会被使用了Spring Security的web应用程序所使用，所以我们得先看看它们和它们支持的类与接口。我们不会说明每一个功能，所以如果你想要得到完整的信息，那么就去看看它们的Javadoc。
+
+=== FilterSecurityInterceptor
+
+我们已经在介绍`access-control`时简短的介绍了一下`FilterSecurityInterceptor`，并且我们已经在使用了命名空间的元素时将其绑定到了配置之中。现在，我们会看看如何明确地通过`FilterChainProxy`来配置它，伴随着它的小伙伴过滤器`ExceptionTranslationFilter`一起。典型的配置如下：
+
+[source,xml]
+----
+<bean id="filterSecurityInterceptor"
+    class="org.springframework.security.web.access.intercept.FilterSecurityInterceptor">
+<property name="authenticationManager" ref="authenticationManager"/>
+<property name="accessDecisionManager" ref="accessDecisionManager"/>
+<property name="securityMetadataSource">
+    <security:filter-security-metadata-source>
+    <security:intercept-url pattern="/secure/super/**" access="ROLE_WE_DONT_HAVE"/>
+    <security:intercept-url pattern="/secure/**" access="ROLE_SUPERVISOR,ROLE_TELLER"/>
+    </security:filter-security-metadata-source>
+</property>
+</bean>
+
+----
+
+`FilterSecurityInterceptor`负责HTTP资源的安全操作。它需要一个对`AuthenticationManager`和一个对`AccessDecisionManager`的引用。它也提供属性配置，从而可以应用到不同的HTTP URL请求。参考一下本教程《技术简介》一章最初的讨论。
+
+`FilterSecurityInterceptor`可以用两种方法在配置属性中配置。第一种就像上面那样，使用`<filter-security-metadata-source>`命名空间元素。它和《命名空间》一节中的`<http>`元素很相似，但其中的`<intercept-url>`子元素只使用pattern和access属性。逗号用于为用于每个HTTP URL的不同的配置属性进行区分。第二种方式是写一个你自己的`SecurityMetadataSource`，但它超出了此文档的范围。不论方法如何，`SecurityMetadataSource`负责返回一个包含了所有的配置属性的`List<ConfigAttribute>`，它们与一个简单安全的HTTP相关。
+
+你应当注意：`FilterSecurityInterceptor.setSecurityMetadataSource()`方法期望一个`FilterInvocationSecurityMetadataSource`实例。它是一个制造器接口，并且`SecurityMetadataSource`是它的子类。它简单地表示`SecurityMetadataSource`理解`FilterInvocation`s。在这个简单的兴趣中，我们继续像`SecurityMetadataSource`一样参考`FilterInvocationSecurityMetadataSource`，二者的在与大部分用户的关系上有一点小区别。
+
+`SecurityMetadataSource`由命名空间语法创建，它获取一个特殊的`FilterInvocation`，获取方式是通过配置的pattern属性来匹配请求的URL。这与在命名空间配置的方式在行为上是一样的。默认将所有的表达式看作是Apache Ant路径，在更复杂的情况下也支持正则表达式。`request-matcher`属性用于指定pattern的类型。不能用同样的定义最小化表达式语法。例如，可以用正则表达式来代替之前的Ant路径的配置：
+
+[source,xml]
+----
+<bean id="filterInvocationInterceptor"
+    class="org.springframework.security.web.access.intercept.FilterSecurityInterceptor">
+<property name="authenticationManager" ref="authenticationManager"/>
+<property name="accessDecisionManager" ref="accessDecisionManager"/>
+<property name="runAsManager" ref="runAsManager"/>
+<property name="securityMetadataSource">
+    <security:filter-security-metadata-source request-matcher="regex">
+    <security:intercept-url pattern="\A/secure/super/.*\Z" access="ROLE_WE_DONT_HAVE"/>
+    <security:intercept-url pattern="\A/secure/.*\" access="ROLE_SUPERVISOR,ROLE_TELLER"/>
+    </security:filter-security-metadata-source>
+</property>
+</bean>
+
+----
+
+Patterns一直都会被按它们被定义的顺序进行判定。因此在列表中把更特殊的patterns定义在没那么特殊的patterns的上方非常重要。你可以在上面的例子中看到这一点，更特殊的 /secure/super pattern放在没那么特殊的 /secure/ pattern的上面。如果它们被颠倒，那么 /secure/ pattern将会一直被匹配，并且你永远也没办法进入 /secure/super/ pattern。
+
+=== 14.2 ExceptionTranslationFilter
+
+`ExceptionTranslationFilter`在安全过滤器栈中位于`FilterSecurityInterceptor`之上。它自己不会做任何实际的安全操作，但它会捕获安全拦截器中的异常，并提供一个适当的HTTP响应。
+
+[source,xml]
+----
+<bean id="exceptionTranslationFilter"
+class="org.springframework.security.web.access.ExceptionTranslationFilter">
+<property name="authenticationEntryPoint" ref="authenticationEntryPoint"/>
+<property name="accessDeniedHandler" ref="accessDeniedHandler"/>
+</bean>
+
+<bean id="authenticationEntryPoint"
+class="org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint">
+<property name="loginFormUrl" value="/login.jsp"/>
+</bean>
+
+<bean id="accessDeniedHandler"
+    class="org.springframework.security.web.access.AccessDeniedHandlerImpl">
+<property name="errorPage" value="/accessDenied.htm"/>
+</bean>
+
+----
+
+==== AuthenticationEntryPoint
+
+如果用户请求一个被保护的HTPP资源，但此时他们没有被认证，那么`AuthenticationEntryPoint`会被调用。一个恰当的`AuthenticationException`或者`AccessDeniedException`会被一个安全拦截器从调用栈中抛出，从而触发入口的开始方法。
+
+.UML 未认证用户请求流程
+[uml]
+--
+@startditaa
++-------------------+  http   +-------------------+
+| Unauthorized User +-------->+ secured resources |
++-------------------+         +--------+----------+
+        ^                              |
+        |                       reject | 
+        |                              v
+        |               +--------------+-----------+
+        +---------------+ AuthenticationEntryPoint |
+AuthenticationException +--------------------------+
+@endditaa
+--
+
+这能够给用户返回适当的响应信息，从而让用户开始认证。我们在这里使用的LoginUrlAuthenticationEntryPoint会将用户重定向到另一个URL（通常是一个登陆页面）。具体的实现取决于你想要在你的应用中使用的认证机制。
+
+==== AccessDeniedHandler
+
+当用户已经认证完成，并且他们尝试访问无权访问的资源时会发生什么？通常这不会发生，因为你系统会根据用户权限，在页面上只显示用户能访问的URL。但也会有例外，例如用户直接输入了管理台的URL地址，或者直接在RESTful的URL上做了些许参数的改变。你的应用应该考虑到这样的情况，因此你应该在你的服务层中，加上基于URLs以及方法的安全校验。
+
+如果用户已经登录，并且抛出了AccessDeniedException异常，那么说明用户无权进行操作。这种情况下，ExceptionTranslationFilter会调用第二个策略，即AccessDeniedHandler。通常情况下会使用AccessDeniedHandlerImpl，它给客户端发送一个403(禁止)响应吗。你也可以配置其他的实例（像上面那样）并设置一个错误页面，将用户请求直接forwards到此错误页面 [11]。页面可以是简单的“拒绝访问”页面，例如JSP，也可以是复杂的MVC控制器。你也可以根据自己的需要来做恰当的实现。
+
+如果你使用了命名空间来配置用户应用，你也可以定制一个`AccessDeniedHandler`。参见命名空间附录详情 14.2.3 `SavedRequest`s 和 RequestCache接口。
+
+`ExceptionTranslationFilter`另外还负责在调用`AuthenticationEntryPoint`之前保存当前请求。这允许请求被保存到用户完成认证之后（参见之前的web认证概述）。在用户提交登录认证表单并成功认证之后，默认的`SavedRequestAwareAuthenticationSuccessHandler`会将用户重定向到源URL（参见下文）。
+
+RequestCache封装了必要的功能来保存和检索HttpServletRequest实例。默认会使用`HttpSessionRequestCache`，它会在HttpSession中保存请求。在用户被重定向到源URL时，`RequestCacheFilter`负责实际的在cache中保存请求的认证。
+
+通常你无须改变任何功能，除非保存请求的操作不适合你的应用或者默认配置无法解决你的问题。从Spring Security 3.0版本之后，所有这些接口的使用都是可拔插的。
+
+=== SecurityContextPersistenceFilter
+
+我们已经在《技术概览》一章中提到了的所有重要的过滤器，但你可能还想在这章更深入的了解它们。首先我们介绍了如何配置一个`FilterChainProxy`。最基本的配置只需要一个bean：
+
+[source,xml]
+----
+<bean id="securityContextPersistenceFilter" class="org.springframework.security.web.context.SecurityContextPersistenceFilter"></bean>
+----
+
+就像我们之前看到的，该过滤器有两个主要目标。它负责在HTTP请求间存储`SecurityContext`上下文，同时还负责在请求完成时清理SecurityContextHolder。清理保存了上下文的`ThreadLocal`是非常重要的，否则线程可能会在servlet容器的线程池中被替换，而特定的用户仍然保留着线程的引用。这一线程可能后续的阶段被使用，用错误的凭证来执行操作。
+
+==== SecurityContextRepository
+
+从Spring Security 3.0起，加载和保存security上下文被委托给一个独立的策略接口：
+
+[source,java]
+----
+public interface SecurityContextRepository {
+
+    SecurityContext loadContext(HttpRequestResponseHolder requestResponseHolder);
+    
+    void saveContext(SecurityContext context, HttpServletRequest request, HttpServletResponse response); 
+}
+----
+
+`HttpRequestResponseHolder`是一个简单的容器，它用于传入请求和响应对象，我们可以用封装类型重新实现它来替换这些操作。返回的内容会传递给过滤器链。
+
+默认的实现是`HttpSessionSecurityContextRepository`，它将security上下文作为一个HttpSession属性来保存。最重要的配置参数是allowSessionCreation，它默认为true，这使得在需要为一个认证的用户保存security上下文时，`HttpSessionSecurityContextRepository`类会创建一个session（除非认证发生，并且security上下文的内容发生改变，否则它不会被创建）。如果你不想要session被创建，那么你可以将参数设置为false。
+
+[source,xml]
+----
+<bean id="securityContextPersistenceFilter" class="org.springframework.security.web.context.SecurityContextPersistenceFilter">
+    <property name="securityContextRepository">
+        <bean class="org.springframework.security.web.context.HttpSessionSecurityContextRepository">
+            <property name="allowSessionCreation" value="false"></property>
+        </bean>
+    </property>
+</bean>
+----
+
+你也可以将null对象作为`NullSecurityContextRepository`实例，它会阻止安全上下文被保存，即使session已经在请求期间被创建。
+
+
+=== UsernamePasswordAuthenticationFilter
+
+我们已经介绍了3个主要的过滤器，它们总会在Spring Security web配置中被添加。还有三个过滤器会被命名空间<http>元素自动创建，并且它们无法被取缔。现在我们唯一缺少的就是用户认证机制。这是一个最通用的认证过滤器，并且它常常会被自定义 [13]。我们也可以在xml配置中用<form-login>元素来提供一个实现。需要分三个阶段进行配置：
+
+*   配置一个LoginUrlAuthenticationEntryPoint与一个登录页面的URL，并将其设置到ExceptionTranslationFilter。
+*   实现登录页面（用JSP或者MVC控制器）。
+*   配置一个UsernamePasswordAuthenticationFilter到应用上下文中。
+*   添加过滤器bean到你的过滤器链proxy中（注意添加顺序）
+
+登录表单简单的包含用户名和密码输入框，并posts到过被滤器监听的URL（默认是/login）。基本过滤器配置看起来像这样：
+
+[source,xml]
+----
+<bean id="authenticationFilter" class="org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter"><property name="authenticationManager" ref="authenticationManager"></property></bean>
+----
+
+==== 认证成功和失败时的应用程序流程
+
+过滤器调用配置的AuthenticationManager来处理每个认证请求。认证成功或认证失败的处理流程分别由`AuthenticationSuccessHandler`和`AuthenticationFailureHandler`策略接口来控制。过滤器包含一些参数来允许你定制它们[14]。诸如`SimpleUrlAuthenticationSuccessHandler`、`SavedRequestAwareAuthenticationSuccessHandler`、`SimpleUrlAuthenticationFailureHandler`、`ExceptionMappingAuthenticationFailureHandler`等这些接口的标准的实现都会被提供。你可以查看这些类的Javadoc以及`AbstractAuthenticationProcessingFilter`的源码来学习它们如何工作，并且提供哪些功能。
+
+认证成功时，最终的Authentication对象会被放置到SecurityContextHolder之中。然后会调用配置的AuthenticationSuccessHandler来将用户redirect或者forward到合适的目标页面。默认情况下会使用SavedRequestAwareAuthenticationSuccessHandler，这意味着用户会被redirected到他们在登录之前请求的页面。
+
+ExceptionTranslationFilter缓存了用户一开始的request。在用户认证时，请求操作会从被缓存的request中获取并redirect到源URL。源请求之后会被重建并被覆盖。
+
+如果认证失败，配置的`AuthenticationFailureHandler`会被调用。
+
+[11] 我们使用了forward，因此SecurityContextHolder仍然包含了principal的详细信息，这对于展示用户信息非常有用。在老版本的Spring Security，我们依赖servlet容器来操作403错误信息，它缺少有用的上下文信息。
+
+[12] 在Spring Security 2.0和更早的版本，这个过滤器叫做`HttpSessionContextIntegrationFilter`，并且由过滤器自己处理所有保存上下文的所有操作。如果你熟悉这个类，那么大部分可用的配置选项都可以在`HttpSessionSecurityContextRepository`之中找到。
+
+[13] 由于一些历史原因，在Spring Security 3.0之前的版本，这个过滤器叫做`AuthenticationProcessingFilter`，并且入口叫做`AuthenticationProcessingFilterEntryPoint`。由于框架现在支持很多不同的认证框架，它们便在3.0之后拥有了更具体的名字。
+
+[14] 在3.0之前的版本，应用程序流程已经进化到一个阶段，在这个类和策略插件中，它可以由最小化的属性来控制。3.0之后我们决定进行重构，使两种策略相互分离。
