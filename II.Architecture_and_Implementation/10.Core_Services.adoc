@@ -1,0 +1,224 @@
+== 核心服务
+
+我们已经知道了Spring Security的高级概述以及它的核心类，让我们更进一步查看一到两个核心接口以及它们的实现，主要是`AuthenticationManager`, `UserDetailsService`还有`AccessDecisionManager`。这些东东会在后续的文档中经常出现，因此去理解如何配置以及如何操作它们是非常重要的。
+
+=== AuthenticationManager, ProviderManager 与 AuthenticationProvider
+
+`AuthenticationManager`只是一个接口，其实现可以是任何我们需要的类，但它是如何工作的嘞？如果我们想要检查多个认证数据库或者一个不同的认证服务的联合，例如一个数据库或者一个LDAP服务，那么我们应该怎样做？
+
+默认的Spring Security的实现叫做`ProviderManager`，它并不自己操作认证请求，而是通过一系列配置的`AuthenticationProvider`s，它们被轮训来处理认证。每个provider要么抛出一个异常，要么返回一个完整的`Authentication`对象。
+
+.源码片段
+[source,java]
+----
+public class ProviderManager implements AuthenticationManager {
+
+    private List<AuthenticationProvider> providers = Collections.emptyList();
+
+    public ProviderManager(List<AuthenticationProvider> providers, AuthenticationManager parent) {
+        ...
+        this.providers = providers;
+        ...
+    }
+
+    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+        ...
+        for (AuthenticationProvider provider : getProviders()) {
+            ...
+            result = provider.authenticate(authentication);
+
+            if (result != null) {
+                copyDetails(authentication, result);
+                break;
+            }
+            ...
+        }
+        ...
+        return result;
+    }
+}
+
+----
+
+还记得我们的小伙伴`UserDetails`还有`UserDetailsService`吗？如果不记得那你得回去看看前面的章节。校验认证请求的最通用的办法是去读取相应的`UserDetails`，然后检查用户输入的密码。你可以通过`DaoAuthenticationProvider`来做到这点（参见下文）。被装载的`UserDetails`对象 - 还有它包含的对应的`GrantedAuthority`s对象们 - 会被用来构建一个完整的`Authentication`对象，此对象会由一个成功的认证返回，并被存储到`SecurityContext`中。
+
+[source,java]
+----
+public interface UserDetails {
+    ...
+    Collection<? extends GrantedAuthority> getAuthorities();
+    ...
+}
+
+----
+
+如果你使用的是命名空间方式，那么其内部会自动创建一个`ProviderManager`，你需要在其中添加多个`authentication provider`元素来提供一个providers（参见 http://docs.spring.io/spring-security/site/docs/4.2.0.RELEASE/reference/htmlsingle/#ns-auth-manager[命名空间一节]）。这种情况下，你不应该在应用上下文中声明一个`ProviderManager`bean。
+
+但如果你没有使用命名空间配置，那么你需要声明它：
+
+[source,java]
+----
+<bean id="authenticationManager"
+        class="org.springframework.security.authentication.ProviderManager">
+    <constructor-arg>
+        <list>
+            <ref local="daoAuthenticationProvider"/>
+            <ref local="anonymousAuthenticationProvider"/>
+            <ref local="ldapAuthenticationProvider"/>
+        </list>
+    </constructor-arg>
+</bean>
+
+----
+
+在上面的例子中我们提供了三个provider。它们会从上到下依照顺序被注入`ProviderManager`的providers之中，每一个provider都可以尝试认证，或者通过简单的返回null来跳过认证。如果所有的provider都返回null，那么`ProviderManager`会抛出一个`ProviderNotFoundException`。如果你对providers链感兴趣，可以参见`ProviderManager`的Java文档。
+
+认证机制 - 例如web表单登陆处理过滤器 - 被通过引用注入到 `ProviderManager` 中，然后被调用，以处理认证请求。你需要的providers有时候需要可拆卸的认证机制，而有时候它们会依赖于指定的认证机制。例如，`DaoAuthenticationProvider`和`LdapAuthenticationProvider`能够兼容任何使用用户名和密码进行提交的认证机制，因此它们能够在基于表单的登陆和基于HTTP的认证中运作。另一方面，一些认证机制创建一个认证请求，它只能由一种`AuthenticationProvider`解析。
+
+例如JA-SIG CAS，它使用服务ticket概念，因此仅能通过`CasAuthenticationProvider`进行认证。你不需要过于关心它，因为如果你忘了注册一个适当的provider，在认证的时候你会收到一个`ProviderNotFoundException`。
+
+==== 认证成功后清除凭证
+
+默认的`ProviderManager`在认证请求成功后，会尝试从`Authentication`中清除任何敏感的凭证信息（Spring Security 3.1之后的版本）。这能够阻止像密码这样的信息被保留太久。
+
+这可能会在你使用缓存的user对象时造成一些问题，例如在无状态的应用中改善性能。如果`Authentication`中包含了一个在cache中的对象的引用（例如`UserDetails`实例），并且它的凭证已经被移除，那么它就不再能够针对缓存值进行认证。如果你使用cache，那么你需要记住这点。我们建议你先拷贝一个对象，放到返回此`Authentication`对象的cache实现或者`AuthenticationProvider`之中。或者，你也可以在`ProviderManager`中禁用`eraseCredentialsAfterAuthentication`参数。在JavaDoc中参考更多信息。
+
+==== DaoAuthenticationProvider
+
+[source,java]
+----
+public class DaoAuthenticationProvider extends AbstractUserDetailsAuthenticationProvider { ... }
+
+public abstract class AbstractUserDetailsAuthenticationProvider implements AuthenticationProvider {
+
+    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+        ...
+    }
+}
+
+----
+
+Spring Security中最简单的`AuthenticationProvider`实现就是`DaoAuthenticationProvider`，它也是框架中最简单的支持。它利用一个`UserDetailsService`(例如一个Dao）按顺序查找用户名、密码以及`GrantedAuthority` s。它简单通过为用户比较密码来进行认证，用户信息被提交到`UsernamePasswordAuthenticationToken`之中，并且从`UserDetailsService`中被读取。配置如下：
+
+[source,xml]
+----
+<bean id="daoAuthenticationProvider"
+    class="org.springframework.security.authentication.dao.DaoAuthenticationProvider">
+<property name="userDetailsService" ref="inMemoryDaoImpl"/>
+<property name="passwordEncoder" ref="passwordEncoder"/>
+</bean>
+
+----
+
+`PasswordEncoder`是可选的。`PasswordEncoder`在`UserDetails`对象中提供了密码的编码与解码，它由配置中的`UserDetailsService`返回。更多信息参见后文。
+
+=== UserDetailsService实现
+
+就像上文提到的那样，大多数认证providers使用`UserDetails`和`UserDetailsService`接口。回忆一下`UserDetailsService`的约定：
+
+[source,java]
+----
+UserDetails loadUserByUsername(String username) throws UsernameNotFoundException;
+
+----
+
+被返回的`UserDetails`是一个接口，它提供getters来保证用户名、密码、授权等认证信息非null，而不管账户是否可用。大多数认证providers会使用一个`UserDetailsService`，即使用户名和密码从未被认证机制所使用。它们用来返回`UserDetails`对象，仅仅是为了获取`GrantedAuthority`信息，因为一些其他系统（例如LDAP或者X.509或者CAS等等）已经对用户凭证进行过验证。
+
+`UserDetailsService`非常容易实现，它应该允许用户使用一个持续的策略，很容易地检索权限信息。话虽如此，Spring Security包含了一套基础的实现，详见后文。
+
+==== 内存中的认证
+
+创建一个自定义的`UserDetailsService`实现非常简单，它用一种可持续的选择机制来提取信息，但很多应用程序并不需要这么复杂。如果你正在构建系统原型，或者只是刚开始集成Spring Security，当你并不想花太多时间去配置数据库或者自定义一个`UserDetailsService`实现时，你肯定会想要一个简单的开始。在这种情况下，你可以简单的配置一下命名空间，即可获得你想要的认证用户：
+
+[source,java]
+----
+<user-service id="userDetailsService">
+<user name="jimi" password="jimispassword" authorities="ROLE_USER, ROLE_ADMIN" />
+<user name="bob" password="bobspassword" authorities="ROLE_USER" />
+</user-service>
+
+----
+
+我们也支持properties文件哟~
+
+[source,java]
+----
+<user-service id="userDetailsService" properties="users.properties"/>
+
+----
+
+properties文件的内容如下：
+
+[source,java]
+----
+username=password,grantedAuthority[,grantedAuthority][,enabled|disabled]
+
+----
+
+实际就像这样：
+
+[source,prop]
+----
+jimi=jimispassword,ROLE_USER,ROLE_ADMIN,enabled
+bob=bobspassword,ROLE_USER,enabled
+
+----
+
+==== JdbcDaoImpl
+
+Spring Security 也包含一个可以从JDBC数据源获取认证信息的`UserDetailsService`实现。Spring内部使用了JDBC，因此它能够避免使用复杂的全功能的ORM来包装用户详细信息。如果你的应用使用ORM工具，那么你会需要自定义一个`UserDetailsService`来重新使用你的映射文件。JdbcDaoImpl的示例如下：
+
+[source,xml]
+----
+<bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+<property name="driverClassName" value="org.hsqldb.jdbcDriver"/>
+<property name="url" value="jdbc:hsqldb:hsql://localhost:9001"/>
+<property name="username" value="sa"/>
+<property name="password" value=""/>
+</bean>
+
+<bean id="userDetailsService"
+    class="org.springframework.security.core.userdetails.jdbc.JdbcDaoImpl">
+<property name="dataSource" ref="dataSource"/>
+</bean>
+
+----
+
+你可以使用不同的关系型数据库管理系统，只需要改变一下`DriverManagerDataSource`的配置即可。你也可以使用从JNDI获取的全局的数据源，就像其他的Spring配置一样。
+
+===== 权限组
+
+默认情况下，`JdbcDaoImpl`假设权限直接映射到用户之上，并为单个用户读取权限。（参见 http://docs.spring.io/spring-security/site/docs/4.2.0.RELEASE/reference/htmlsingle/#appendix-schema[数据库schema附录]）。另一种方法是把权限划分到不同的分组里面，并将不同的组分配给用户。有些使用者更喜欢使用这样的方式来管理用户权限。参见`JdbcDaoImpl`的Javadoc查看更多信息。分组的schema也包含在附录之中。
+
+=== 密码编码
+
+Spring Security的`PasswordEncoder`用来支持密码编码。你不应该使用明文方式保存密码。坚持使用一种密码哈希算法，例如bcrypt，此算法使用了一种加盐的方式，因此对于每个存储的密码都是不一样的。不要使用像是MD5或SHA（包括加盐版本）这样的简单哈希方法。Bcrypt有意设计得更慢，从而阻止离线密码破解，不像标准哈希算法那样快并且能够通过并行的硬件很快的测试成百上千个密码。你也许想，这不会发生在你身上，因为你的密码在数据库上是安全的，离线密码攻击并不是一个风险。如果是这样，那么你应该做一些研究，并且了解所有的使用了这种方式并被警示为不安全的知名网站。你的站点最好更安全一些。使用"org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder"是一个不错的安全选择。还有一些由另外的通用的程序语言实现的兼容的组件，你也可以试试。
+
+如果你正在使用一个已经使用了哈希密码的遗留系统，那么你需要使用适合你当前算法的编码器，至少持续到你能够迁移你的用户到更安全的schema（通常这会牵扯到让你的用户设置一个新的密码，因为哈希是不可逆的）。Spring Security具有一个包含了遗留密码的编码实现，即`org.springframework.security.authentication.encoding`。`DaoAuthenticationProvider`可以以新的或遗留的`PasswordEncoder`类型被注入。
+
+==== 什么是哈希
+
+密码哈希并不是Spring Security所特有的，它是一种非常通用混淆工具。一种哈希（或摘要）算法是一种单向的函数，它用来从像是密码这样的输入数据中生成一些另外的固定长度的数据。例如，使用MD5对字符串"password"（16进制）进行哈希得到如下结果：
+
+[source,text]
+----
+5f4dcc3b5aa765d61d8327deb882cf99
+
+----
+
+哈希是单向的，想要获取给定哈希值的源输入非常困难（实际上是不可能的），任何输入都可能产生这个哈希值。这种性质使得哈希值在认证中非常有用。它可以被存储在你的用户数据库中来替代明文密码存储，即使密码暴露，盗用者也不能立即使用此密码进行登陆。这意味一旦密码被编码，那么你无法还原它。
+
+==== 加盐的哈希
+
+密码哈希存在一种潜在的问题，使用同样的单词进行单向的运算非常简单。人们常常会使用相似的密码，以前被黑的站点中存在着大量的这样的字典，它们都是可用的。如果你用google查找哈希值 `5f4dcc3b5aa765d61d8327deb882cf99`，你可以很快找到源单词"password"。用类似的方法，一个攻击者可以用标准的单词清单构建一个哈希字典，从而用来寻找源密码。预防这种攻击的方式是使用健壮的密码策略，意思是说不要用一些已存在的单词组合。另一种方式是使用加盐的哈希算法。在对每个用户的密码进行计算之前，都加上附加的字符串，附加的字符串叫做盐。理想的盐是尽可能随机的，但实际上任何盐值都是可取的。一旦加了盐，意味着攻击者必须根据每一个盐值来构建单独的字典，攻击者需要做更多的工作（但并非不可能破解）。
+
+Bcrypt为每个加密的密码都自动生成一个随机的盐值，并且用一种标准的格式在bcrypt字符串中存储它。
+
+[NOTE]
+定制加盐操作，可以给`DaoAuthenticationProvider`注入一个`SaltSource`，它会为特定的用户获取一个盐值，并传递到`PasswordEncoder`当中。使用bcrypt意味着你不需要考虑盐值操作的详情（例如该值存储在哪里），它们都会在算法内部被完成。因此我们非常推荐你使用bcrypt，除非你已经有一个新系统，来单独的存储盐值。
+
+==== 哈希与认证
+
+当一个认证provider（例如Spring Security的`DaoAuthenticationProvider`）需要为用户检查一个被提交上来的密码时，如果已知的密码值被以某种方式编码，那么提交值也必须被以同样的算法进行编码才能进行比较。Spring Security是否对这些加密值进行控制取决于你。如果你添加密码哈希到你的Spring Security认证配置中，并且你的数据库包含了明文密码，那么肯定会认证失败。就算你对你数据库中的密码进行MD5编码，同时你的应用程序配置了使用Spring Security的`Md5PasswordEncoder`，这样仍可能会有问题。数据库可能使用了Base 64进行编码，例如编码器使用了hexadecimal字符串（默认情况）。或者你的数据库使用了大写存储方式，而编码输出的时候是小写。在你做更多事情并且给你的应用添加认证之前，自己写一个测试，对你配置中的密码编码进行测试，加上些盐，然后将其与数据库中的值进行对比。使用标准的方式，例如bcrypt算法，可以帮你避免这些问题。
+
+如果你希望在Java中直接生成密码，并存储到你的用户数据库中，那么你可以使用`PasswordEncoder`的`encode`方法。

@@ -21,7 +21,7 @@ Jeff Lu
 
 include::I.Preface/README.adoc[已完成]
 
-include::II.Architecture_and_Implementation/README.adoc[正在翻译]
+include::II.Architecture_and_Implementation/README.adoc[已完成]
 
 include::III.Testing/README.adoc[尚未开始]
 
