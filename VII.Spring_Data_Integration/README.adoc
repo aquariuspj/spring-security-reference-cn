@@ -1,0 +1,7 @@
+= Spring Data Integration
+
+Spring Security provides Spring Data integration that allows 
+referring to the current user within your queries.
+It is not only useful but necessary to include the user in the queries 
+to support paged results since filtering the results afterwards would 
+not scale.

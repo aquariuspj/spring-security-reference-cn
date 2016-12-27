@@ -1,0 +1,6 @@
+= Testing
+
+This section describes the testing support provided by Spring Security.
+
+[NOTE]
+To use the Spring Security test support, you must include `spring-security-test-4.1.3.RELEASE.jar` as a dependency of your project.

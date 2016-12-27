@@ -19,6 +19,17 @@ QQ交流群：42956219
 
 此版本使用AsciiDoc进行编辑。
 
+进度条：
+
+* 第一部分. 简介.......................[ Finished ]
+* 第二部分. 架构与实现.............[ Translating... ]
+* 第三部分. 测试........................[ waiting ]
+* 第四部分. Web应用安全..........[ Translating... ]
+* 第五部分. 授权........................[ waiting ]
+* 第六部分. 其他主题.................[ waiting ]
+* 第七部分. Spring Data集成.....[ waiting ]
+* 第八部分. 附录........................[ waiting ]
+
 
 > **Copyright © 2004-2015**  
 > Copies of this document may be made for your own use and for distribution to others, provided that you do not charge any fee for such copies and further provided that each copy contains this Copyright Notice, whether distributed in print or electronically.  

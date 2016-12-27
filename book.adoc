@@ -19,6 +19,18 @@ Jeff Lu
 .版权所有 © 2004-2015
 此文档免费公开，但不可用于任何商业行为。你可以将此文档引用到其他地方，但务必保留此声明。
 
-include::I.Preface/README.adoc[]
+include::I.Preface/README.adoc[已完成]
 
-include::II.Architecture_and_Implementation/README.adoc[]
+include::II.Architecture_and_Implementation/README.adoc[正在翻译]
+
+include::III.Testing/README.adoc[尚未开始]
+
+include::IV.Web_Application_Security/README.adoc[正在翻译]
+
+include::V.Authorization/README.adoc[尚未开始]
+
+include::VI.Additional_Topics/README.adoc[尚未开始]
+
+include::VII.Spring_Data_Integration/README.adoc[尚未开始]
+
+include::VIII.Appendix/README.adoc[尚未开始]

@@ -22,18 +22,18 @@ http://www.owasp.org/[OWASP web 站点] 上保持前十的 web 应用漏洞清�
 
 最后，由衷的欢迎你加入 Spring Security 社区。
 
-include::01.Getting_Started.adoc[]
+include::01.Getting_Started.adoc[已完成]
 
-include::02.Introduction.adoc[]
+include::02.Introduction.adoc[已完成]
 
-include::03.What's_New_in_Spring_Security_4.1.adoc[]
+include::03.What's_New_in_Spring_Security_4.1.adoc[已完成]
 
-include::04.Samples_and_Guides.adoc[]
+include::04.Samples_and_Guides.adoc[已完成]
 
-include::05.Java_Configuration.adoc[]
+include::05.Java_Configuration.adoc[已完成]
 
-include::06.Security_Namespace_Configuration.adoc[]
+include::06.Security_Namespace_Configuration.adoc[已完成]
 
-include::07.Sample_Applications.adoc[]
+include::07.Sample_Applications.adoc[已完成]
 
-include::08.Spring_Security_Community.adoc[]
+include::08.Spring_Security_Community.adoc[已完成]
