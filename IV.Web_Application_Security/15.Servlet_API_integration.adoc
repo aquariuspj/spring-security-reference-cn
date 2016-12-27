@@ -1,0 +1,163 @@
+== Servlet API集成
+
+本节描述了Spring Security如何集成Servlet API。servletapi-xml示例应用展示了每个这些方法的用法。
+
+=== Servlet 2.5+集成
+
+====  HttpServletRequest.getRemoteUser()
+
+`HttpServletRequest.getRemoteUser()`会返回一个`SecurityContextHolder.getContext().getAuthentication().getName()`的结果，它代表了当前的用户名。如果你想要在应用程序中显示当前用户名，这会非常有用。另外，检查它是否为null来判定用户是已经认证了还是仍然是匿名。了解用户是否已经认证对于判定某些UI元素是否显示非常有用（例如注销链接只会为未认证的用户显示）。
+
+==== HttpServletRequest.getUserPrincipal()
+
+`HttpServletRequest.getUserPrincipal()`会返回一个`SecurityContextHolder.getContext().getAuthentication()`的结果。这意味着它是一个`Authentication`，在使用基于用户名和密码的认证时，它是一个典型的`UsernamePasswordAuthenticationToken`实例。这在你需要关于你的用户的附加信息时非常有用。例如，你可能创建了一个自定义的`UserDetailsService`，它返回一个自定义的`UserDetails`，并包含了用户的姓与名。你可以像下面这样获取这些信息：
+
+[source,java]
+----
+Authentication auth = httpServletRequest.getUserPrincipal();
+// assume integrated custom UserDetails called MyCustomUserDetails
+// by default, typically instance of UserDetails
+MyCustomUserDetails userDetails = (MyCustomUserDetails) auth.getPrincipal();
+String firstName = userDetails.getFirstName();
+String lastName = userDetails.getLastName();
+
+----
+
+[IMPORTANT]
+注意，这是一个典型的糟糕的实践，它在你的应用中执行了太多逻辑。作为替代，一种办法是将它集成到Servlet API中，从而减少与Spring Security的耦合性。
+
+==== HttpServletRequest.isUserInRole(String)
+
+`HttpServletRequest.isUserInRole(String)`会将role传递到`isUserInRole(String)`，从而判断`SecurityContextHolder.getContext().getAuthentication().getAuthorities()`是否包含一个`GrantedAuthority`。传统的用户不应该传递`ROLE`前缀到方法中，它们会被自动添加。例如，如果你想要判断当前用户是否要授权“ROLE_ADMIN”，你可以像下面这样：
+
+[source,java]
+----
+boolean isAdmin = httpServletRequest.isUserInRole("ADMIN");
+
+----
+
+这在判断是否需要显示UI组件时非常有用。例如，你可能只想在当前用户是admin时显示admin链接。
+
+=== Servlet 3+集成
+
+下面这节描述Spring Secueity集成的Servlet 3方法。
+
+==== HttpServletRequest.authenticate(HttpServletRequest,HttpServletResponse)
+
+`HttpServletRequest.authenticate(HttpServletRequest,HttpServletResponse)`方法可以用于确保用户被认证。如果他们没有被认证，那么配置的`AuthenticationEntryPoint`会要求用户进行认证（例如重定向到登录页面）。
+
+==== HttpServletRequest.login(String,String)
+
+`HttpServletRequest.login(String,String)`方法可以被用于通过当前的`AuthenticationManager`进行用户认证。例如，下面的例子试图对用户名为"user"密码为"password"的用户进行认证。
+
+[source,java]
+----
+try {
+    httpServletRequest.login("user","password");
+    } catch(ServletException e) {
+    // fail to authenticate
+}
+----
+
+[NOTE]
+如果你想用Spring Security来捕获失败的认证请求，那么`ServletException`并非必须的。
+
+==== HttpServletRequest.logout()
+
+`HttpServletRequest.logout()`方法可以被用于注销当前用户。
+
+通常这意味着`SecurityContextHolder`会被清除，`HttpSession`会被无效化，任何"Remember Me"认证都会被清除。但是，被配置的`LogoutHandler`实现会变得依赖于你的Spring Security配置。注意，在`HttpServletRequest.logout()`被调用之后，你仍需要写一种响应方式，这非常重要。通常这会调用一个到欢迎页面的重定向。
+
+==== AsyncContext.start(Runnable)
+
+`AsynchContext.start(Runnable)`方法能确保你的认证被传送到新的线程。使用Spring Security的并发支持，Spring Security重写`AsyncContext.start(Runnable)`，从而确保当前的`SecurityContext`在处理`Runnable`时能够使用。例如，下面这个例子会显示当前用户的`Authentication`：
+
+[source,java]
+----
+final AsyncContext async = httpServletRequest.startAsync();
+async.start(new Runnable() {
+    public void run() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        try {
+            final HttpServletResponse asyncResponse = (HttpServletResponse) async.getResponse();
+            asyncResponse.setStatus(HttpServletResponse.SC_OK);
+            asyncResponse.getWriter().write(String.valueOf(authentication));
+            async.complete();
+        } catch(Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+});
+
+----
+
+==== 异步Servlet支持
+
+如果你正在使用基于Java的配置，那么你可以直接开始。如果你正在使用XML配置，那么它们需要一些必要的更新。第一步是确保你已经更新了web.xml到至少3.0的schema版本：
+
+[source,xml]
+----
+<web-app xmlns="http://java.sun.com/xml/ns/javaee"
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd"
+version="3.0">
+
+</web-app>
+
+----
+
+接下来你需要确保你的`springSecurityFilterChain`被安装来处理异步请求。
+
+[source,xml]
+----
+<filter>
+    <filter-name>springSecurityFilterChain</filter-name>
+    <filter-class>
+        org.springframework.web.filter.DelegatingFilterProxy
+    </filter-class>
+    <async-supported>true</async-supported>
+</filter>
+<filter-mapping>
+    <filter-name>springSecurityFilterChain</filter-name>
+    <url-pattern>/*</url-pattern>
+    <dispatcher>REQUEST</dispatcher>
+    <dispatcher>ASYNC</dispatcher>
+</filter-mapping>
+
+----
+
+搞定了！现在Spring Security会确保你的`SecurityContext`能够接收异步的请求！
+
+它如何工作的呢？如果你不是真的感兴趣，那么你可以调过本章剩余部分，否则继续往下看吧。它们大部分根据Servlet规范进行构建，但还有一些修改，Spring Security要确保合适于异步请求的事情能够运转。在Spring Security 3.2之前，一旦`HttpServletResponse`被提交，`SecurityContext`就会自动被`SecurityContextHolder`保存。这在异步环境下会引起问题。例如考虑一下：
+
+[source,java]
+----
+httpServletRequest.startAsync();
+new Thread("AsyncThread") {
+    @Override
+    public void run() {
+        try {
+            // Do work
+            TimeUnit.SECONDS.sleep(1);
+
+            // Write to and commit the httpServletResponse
+            httpServletResponse.getOutputStream().flush();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}.start();
+
+----
+
+问题在于，线程并不知道Spring Security，因此`SecurityContext`并不会传递给它。这意味着在我们提交`HttpServletResponse`时还没有`SecuriytContext`。当Spring Security在`HttpServletResponse`提交时自动保存`SecurityContext`，我们就会丢失我们的用户登录记录。
+
+在3.2版本之后，Spring Security非常机智，不再在`HttpServletRequest.startAsync()`被调用时提交`HttpServletResponse`并自动保存`SecurityContext`。
+
+=== Servlet 3.1+集成
+
+下面这节描述了Spring Security集成的Servlet 3.1方法。
+
+==== HttpServletRequest#changeSessionId()
+
+`HttpServletRequest.changeSessionId()`是默认的方法，用于在Servlet 3.1过更高版本中对Session固化攻击进行防范。

@@ -1,0 +1,18 @@
+= Web应用安全  
+
+大部分Spring Security的用户会将此框架用于创建HTTP用户和Servlet API的应用程序。在这一部分，我们会带你了解Spring Security如何为应用程序的web层提供认证和访问控制功能。我们会在后文看到命名空间的表观，也会看到类和接口是如何被聚集起来提供web层安全的。在某些情况下，使用传统的bean配置来提供超越配置的全量控制非常有必要，因此我们也会看到如何不通过命名空间，直接配置这些类。  
+
+include::13.The_Security_Filter_Chain.adoc[已完成]
+
+include::14.Core_Security_Filters.adoc[已完成]
+
+include::15.Servlet_API_integration.adoc[已完成]
+
+include::16.Basic_and_Digest_Authentication.adoc[已完成]
+
+include::17.Remember-Me_Authentication.adoc[已完成]
+
+// include::18.Cross_Site_Request_Forgery_(CSRF).adoc[正在翻译]
+
+include::19.CORS.adoc[已完成]
+

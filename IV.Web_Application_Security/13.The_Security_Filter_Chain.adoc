@@ -1,0 +1,131 @@
+== 安全过滤器链
+
+Spring Security的web架构完全基于标准的servlet过滤器。它并没有使用servlets或者任何其它基于servlet的内部框架（例如Spring MVC），因此它并没有与任何特殊的web技术强关联。它处理`HttpServletRequest`s和`HttpServletResponse`，同时并不关心请求是来自一个浏览器、一个web服务客户端、一个HttpInvoker还是一个AJAX应用程序。
+
+Spring Security在内部维护一个过滤器链，每个过滤器都具有特殊的职责，过滤器可以根据服务的需要与否在配置中被添加或删除。过滤器的顺序非常重要，就像它们之间的相关性那样。如果你已经使用了命名空间配置，那么过滤器会自动为你配置，你不需要明确定义任何Spring beans，除非有时候你想要完全控制安全过滤器链，或者因为你正在使用的功能不被命名空间支持，或者你正在使用你自定义的类版本。
+
+=== DelegatingFilterProxy
+
+在使用servlet过滤器时，你首先得在web.xml中进行声明，否则他们将被servlet容器给忽略。在Spring Security中，过滤器类同时也是Spring beans，它们都在应用上下文中被定义，因此可以使用Spring的先进而丰富的依赖注入工具以及声明周期接口。Spring的`DelegatingFilterProxy`提供web.xml与应用上下文之间的连接。
+
+在你使用`DelegatingFilterProxy`时，你会在web.xml中看到：
+
+[source,xml]
+----
+<filter>
+<filter-name>myFilter</filter-name>
+<filter-class>org.springframework.web.filter.DelegatingFilterProxy</filter-class>
+</filter>
+
+<filter-mapping>
+<filter-name>myFilter</filter-name>
+<url-pattern>/*</url-pattern>
+</filter-mapping>
+
+----
+
+注意，过滤器就是一个`DelegatingFilterProxy`，而不是实现了过滤器逻辑的类。`DelegatingFilterProxy`所做的事情是将过滤器的方法委托给一个从Spring应用上下文获取的bean。这可以使bean能够从Spring web应用上下文声明周期的灵活的支持和配置中获得好处。bean必须实现`javax.servlet.Filter`接口，并且必须与`filter-name`中的名字相同。阅读`DelegatingFilterProxy`的Javadoc查看更多信息。
+
+=== FilterChainProxy
+
+Spring Security的web架构只能通过委托给一个`FilterChainProxy`的实例来使用。安全过滤器不应该由它们自己使用。理论上你可以在你的应用上下文中声明每个你需要的Spring Security过滤器bean，并为每个过滤器添加一个对应的`DelegatingFilterProxy`到web.xml中，同时确保它们具有正确的顺序，但这非常不方便，并且如果你还有大量的过滤器，这会使你的web.xml文件很快变得非常杂乱。`FilterChainProxy`让我们简单的在web.xml中添加一个入口，并且通过`DelegatingFilterProxy`来处理所有事情，就像上面的例子展示的那样，不一样的是你得把`filter-name`设置为"filterChainProxy"这个bean名。过滤器链被在应用上下文中以同样的bean名声明：
+
+[source,xml]
+----
+<bean id="filterChainProxy" class="org.springframework.security.web.FilterChainProxy">
+<constructor-arg>
+    <list>
+    <sec:filter-chain pattern="/restful/**" filters="
+        securityContextPersistenceFilterWithASCFalse,
+        basicAuthenticationFilter,
+        exceptionTranslationFilter,
+        filterSecurityInterceptor" />
+    <sec:filter-chain pattern="/**" filters="
+        securityContextPersistenceFilterWithASCTrue,
+        formLoginFilter,
+        exceptionTranslationFilter,
+        filterSecurityInterceptor" />
+    </list>
+</constructor-arg>
+</bean>
+
+----
+
+命名空间元素`filter-chain`被用来很方便地设置你的应用程序中所需要的安全过滤器链(s)。[6]。它映射一个特别的URL节点到一个过滤器列表上，过滤器列表根据`filters`元素中指定的bean名来构建，并将它们绑定到一个`SecurityFilterChain`的bean中。`pattern`属性可以使用Ant风格的路径，最特殊的URIs应该被放到最上方[7]。在运行时，`FilterChainProxy`会定位第一个URI节点，匹配当前的web请求，然后过滤器属性指定的过滤器beans列表会被应用到请求中。过滤器会按照它们被定义的顺序被调用，因此在特定的URL经过过滤器链之后，你已经完成了控制。
+
+你也许会注意到我们在过滤器链中声明了两个`SecurityContextPersistenceFilter` s（ASC是allowSessionCreation的简写，它是一个`SecurityContextPersistenceFilter`的参数）。web服务在功能请求中不会出现一个jsessionid，为这个用户代理创建`HttpSession`s是非常浪费的。如果你有一个需要最大限度进行扩展的大容量的应用程序，我们建议你像上面那样。对于小一些的应用程序，使用一个单例`SecurityContextPersistenceFilter`（它的默认的allowSessionCreation为true）则足够了。
+
+注意，`FilterChainProxy`并不在它被配置的过滤器中调用标准的过滤器生命周期方法。我们建议你使用Spring应用上下文生命周期接口作为替代，就像你使用别的bean一样。
+
+当我们知道了如何使用namespace配置来设置web安全时，我们使用了一个名字叫做"springSecurityFilterChain"的`DelegatingFilterProxy`。你可以看到这是被namespace创建的一个`FilterChainProxy`的名字。
+
+==== 绕开过滤器链
+
+你可以将属性`filters`设置为"none"，从而不用提供一个过滤器bean列表。这将会为相应的请求pattern省略整个过滤器链。注意，任何匹配这个路径的请求都不会应用认证或授权服务，它们将能够自由的被访问。如果你想要在请求过程中使用SpringSecurity上下文，那么你必须给它传递一个过滤器链。否则`SecurityContextHolder`不会被集成进来，同时上下文会是null。
+
+=== 过滤器顺序
+
+过滤器链中的过滤器顺序是非常重要滴。与你正在使用的过滤器无关，顺序应该像下面这样：
+
+*   `ChannelProcessingFilter`，因为它可能需要重定向到一个不同的协议
+*   `SecurityContextPersistenceFilter`，因此`SecurityContext`可以从web请求一开始就被设置到`SecurityContextHolder`中，并且在请求结束时任何对于`SecurityContext`的改变都可以复制到一个`HttpSession`之中（为下一次的web请求做准备）。
+*   `ConcurrentSessionFilter`，因为它使用了`SecurityContextHolder`的功能，并且需要更新`SessionRegistry`，从而响应不间断的来自principal的请求。
+*   认证处理机制 - `UsernamePasswordAuthenticationFilter`，`CasAuthenticationFilter`，`BasicAuthenticationFilter`等等 - 因此`SecurityContextHolder`可以被修改，以包含一个有效的`Authentication`请求token。
+*   `SecurityContextHolderAwareRequestFilter`，如果你正在使用它来安装Spring Security，要记得将`HttpServletRequestWrapper`放入你的servlet容器。
+*   `JaasApiIntegrationFilter`，如果`JaasAuthenticationToken`存在于`SecurityContextHolder`之中，此过滤器会在`JaasAuthenticationToken`中处理`FilterChain`，并将其当作`Subject`。
+*   `RememberMeAuthenticationFilter`，因此如果没有简单的认证处理机制更新`SecurityContextHolder`，并且请求中包含了一个启用remember-me服务的cookie，那么一个适当的被记住的`Authentication`对象会在这里被put到应用上下文中。
+*   `AnonymousAuthenticationFilter`，因此如果没有认证处理机制去更新`SecurityContextHolder`，那么一个匿名的`Authentication`会在这里被put到应用上下文中
+*   `ExceptionTranslationFilter`，它捕获任何Spring Security异常，因此可以返回一个HTTP错误响应，或者启动一个合适的`AuthenticationEntryPoint`
+*   `FilterSecurityInterceptor`，保护web URIs，并在访问被拒绝时抛出异常。
+
+=== 请求匹配，以及HttpFirewall
+
+Spring Security有一些区域，你定义了这些区域的patterns，这些区域需要对进入的请求进行校验，从而为了判定请求应该如何被操作。当`FilterChainProxy`开始判断请求应该传递给哪一个过滤器链，或者`FilterSecurityInterceptor`开始判断要用哪一个安全约束来处理请求时，这一过程会被重现。这一机制是什么？URL值如何与你定义的patterns进行比较？理解这两个问题非常重要！
+
+Servlet规范定义了一些关于`HttpServletRequest`的属性，它们可以通过getter方法获取，并且我们可能想要比较它们。这些属性包括`contextPath`，`servletPath`，`pathInfo`还有`queryString`。Spring Security只对应用中的安全路径感兴趣，因此`contextPath`会被忽略。不幸的是，servlet规范没有明确定义在一个特殊的请求URI中，servletPath和pathInfo的值会包含什么。例如，每个URL的路径段都可能包含参数，就像RFC 2396 [8]中定义的那样。规范也没有清楚地规定这些东东是否应该包含在servletPath和pathInfo的值中，从而导致在不同的servlet容器中这些行为是不一样的。这会存在一个危险：当一个应用程序被部署到一个没有将这些值从路径参数剥离的容器中时，攻击者可以将它们添加到请求的URL中，从而造成出乎意料的模式匹配成功或失败。[9]。其它的进入的URL变体也是存在可能的。例如，可能包含path-traversal序列（就像 /../)或者多个正斜杠（//）造成模式匹配失败。一些容器会使这些意外的格式能够正常映射到servlet中，但一些其它的容器则不会。为了针对这些问题进行保护，`FilterChainProxy`使用一个`HttpFirewall`策略来检查和包装一个请求。非正常的请求默认会被自动拒绝，地址参数和重复的斜杠会被移除，以匹配目标。[10]。因此，用`FilterChainProxy`来管理安全过滤器链是非常必要的。注意，`servletPath`和`pathInfo`值会被容器解码，因此你的应用程序不应该使用任何包含semi-colons的有效路径，它们会被移除以匹配目标。
+
+就像上面提到的那样，默认的策略是使用Ant风格的路径进行匹配，这也许是大部分用户最好的选择。此策略由`AntPathRequestMatcher`类来实现，它使用了Spring的`AntPathMatcher`来针对连在一起的`servletPath`和`pathInfo`，执行一个大小写敏感的pattern校验，并忽略`queryString`。
+
+有时候因为某些原因，你可能会需要更强大的匹配策略，那么你可以使用正则表达式。该策略由`RegexRequestMatcher`实现。参见此类的Javadoc查看更多信息。
+
+在实践中，我们建议你在你的服务层使用方法安全，从而控制对你的应用程序的访问，而且不要完全依赖于定义在web应用等级的安全容器。URLs会改变，对于所有的可能的URLs，应用程序如何支持？请求如何处理？想要完全考虑这些是非常困难的。你应该尝试，并且限制你自己去使用一些简单的ant路径，虽然它们很容易被理解。坚持使用“默认拒绝”的办法，将一个全捕获的通配符定义在最后并拒绝用户访问。
+
+将Security定义在服务层会使它更为健壮并难以绕开，所以你应该坚持利用Spring Security的方法安全选项。
+
+=== 使用其它的基于过滤器的框架
+
+如果你正在使用一些其它的同样是基于过滤器的框架，那么你需要确保Spring Security的过滤器放在第一位。它确保在使用其它过滤器时`SecurityContextHolder`能够被及时集成。例如使用`SiteMesh`来装饰你的web页面，或者使用像`Wicket`的web框架，它通过一个过滤器来对请求进行操作。
+
+=== 高级的命名空间配置
+
+就像我们之前在命名空间一节看到的那样，可以使用多个http元素来为不同的URL patterns定义不同的安全配置。每个http元素都通过内部的`FilterChainProxy`创建一个过滤器链，然后将URL pattern映射到其上。这些元素会按照它们被声明的顺序被添加，因此最特殊的patterns必须被声明在最上方。还有一些其它的例子就像上面那样的情形，比如应用程序在支持无状态的RESTful API的同时，也支持用户通过通常的表单进行登录的web应用程序。
+
+[source,xml]
+----
+<!-- Stateless RESTful service using Basic authentication -->
+<http pattern="/restful/**" create-session="stateless">
+
+<http-basic />
+</http>
+
+<!-- Empty filter chain for the login page -->
+<http pattern="/login.htm*" security="none"/>
+
+<!-- Additional filter chain for normal users, matching all other requests -->
+<http>
+
+<form-login login-page='/login.htm' default-target-url="/home.htm"/>
+<logout />
+</http>
+
+----
+
+*   [6] 注意，你可能需要包含security命名空间到你的应用程序上下文XML文件中，从而使用这一语法。以前使用`filter-chain-map`的语法仍然被支持，但不建议在注入构造参数时使用。
+
+*   [7] 作为路径pattern的替代，`request-matcher-ref`属性可以指定一个`RequestMatcher`实例来实现更强大的匹配。
+
+*   [8] 你可能见过它，在浏览器不支持cookies和jsessionid参数时，它被在一个`semi-colon`后面附加在URL上。然而RFC允许这些参数存在于URL的任何一个路径段中。
+
+*   [9] 一旦请求离开`FilterChainProxy`，那么源值就会被返回，因此在应用中仍然可用。
+
+*   [10] 所以，例如，一个源请求路径 /secure;hack=1/somefile.html;hack=2 会被作为 /secure/somefile.html 返回。
