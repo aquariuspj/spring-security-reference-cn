@@ -1,3 +1,9 @@
+# 此项目不再更新。
+官方文档已翻译完毕。
+请移步至：https://github.com/aquariuspj/spring-security/tree/translator/docs/manual/src/docs/asciidoc
+
+
+
 # Spring Security 中文参考手册
 
 > **作者** Ben Alex , Luke Taylor , Rob Winch , Gunnar Hillert  
@@ -12,8 +18,6 @@
 欢迎活跃的committer加入。  
 
 作者QQ：278400368
-
-QQ交流群：4399664
 
 如有缺漏，欢迎在群中提出。  
 
